@@ -113,9 +113,6 @@ class Player4(BasePlayer):
 	def _outlier_key(self, shade: int) -> tuple[float, float]:
 		age = wears(shade)
 		mean, stddev = self._stats(is_white(shade))
-		# A z-score finds the old tail within a colour. The small dispersion
-		# bonus breaks comparable cases toward the colour whose cluster is less
-		# coherent, which is where one removal has more potential value.
 		z_score = (age - mean) / max(1.0, stddev)
 		return z_score + stddev / 8.0, age
 
@@ -126,9 +123,6 @@ class Player4(BasePlayer):
 		embarrassment = difference if difference > EMBARRASSMENT_THRESHOLD else 0
 		combined_age = wears(offered[a]) + wears(offered[b])
 
-		# Every pair within the threshold scores zero. Normally wear the younger
-		# safe pair: that leaves old-tail socks available for deliberate recycling
-		# and avoids accidental holes when the budget is too tight to recycle.
 		return (
 			float(embarrassment),
 			combined_age if embarrassment == 0 else difference,
@@ -153,10 +147,6 @@ class Player4(BasePlayer):
 		if stddev < 1.0:
 			return max(budget_floor, mean + 1.0)
 
-		# A tight budget makes the accepted cluster wider, so only a remote
-		# old-tail observation is replaced. More slack narrows that range. If
-		# one colour is less coherent than the other, move its edge back toward
-		# its own mean; normalised wear age makes this comparison fair to white.
 		z_width = self.WIDE_Z - (self.WIDE_Z - self.NARROW_Z) * aggressiveness
 		dispersion_advantage = max(0.0, stddev - other_stddev) / max(1.0, stddev + other_stddev)
 		z_width = max(0.0, z_width - self.DISPERSION_SHIFT * dispersion_advantage)
@@ -184,12 +174,6 @@ class Player4(BasePlayer):
 		if turn.day <= self.WARMUP_DAYS:
 			local_budget = usable_budget / max(1, self.roommates)
 		else:
-			# Requested discards are a less delayed estimate of our own bill than
-			# total_spent, which only moves after a same-colour pack of six. Treat
-			# the remainder as the roommates' observed spend and reserve its
-			# projected full-run cost. A thrifty household leaves us more of the
-			# shared allowance; several copies of Player 4 observe one another and
-			# settle back toward an even split.
 			own_imputed_spend = self._requested_discards * PACK_COST / PACK_SIZE
 			others_spend = max(0.0, turn.total_spent - own_imputed_spend)
 			projected_others_spend = others_spend / turn.day * self.days
@@ -200,9 +184,6 @@ class Player4(BasePlayer):
 		allowed_by_today = total_quota * turn.day / max(1, self.days)
 		available_credit = int(allowed_by_today - self._requested_discards)
 
-		# Our local counter charges a fractional pack as soon as we request a
-		# discard, closing the six-sock delay in total_spent. The household check
-		# catches aggressive opponents sharing the same budget.
 		if available_credit < 1:
 			return 0, 0.0
 		spend_target = usable_budget * turn.day / max(1, self.days)
