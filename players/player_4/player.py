@@ -5,7 +5,7 @@ from functools import lru_cache
 from itertools import combinations
 from math import ceil, isinf, sqrt
 
-from core.engine import EMBARRASSMENT_THRESHOLD, PACK_COST, PACK_SIZE
+from core.engine import EMBARRASSMENT_THRESHOLD, HOLE_PROBABILITY, PACK_COST, PACK_SIZE
 from models.player import GameContext, PlayerSnapshot, Selection, TurnContext
 from models.player import Player as BasePlayer
 
@@ -211,7 +211,7 @@ class Player4(BasePlayer):
 		"""Infer a future handful from this player's offers and public game fields."""
 		days_left = max(1, self.days - turn.day)
 		budget = turn.total_spent + turn.budget_remaining
-		reserve = max(self.RESERVE, budget * self.RESERVE_FRACTION)
+		reserve = self._reserve_budget(budget, days_left)
 		replacements_per_day = max(0, turn.budget_remaining - reserve) / days_left * 0.6
 		mix = min(1.0, replacements_per_day * self.HORIZON_DAYS / self.capacity)
 		wear_rate = 2 * self.roommates
@@ -300,6 +300,15 @@ class Player4(BasePlayer):
 		statistical_edge = min(64.0, max(budget_floor, cluster_edge))
 		return aggressiveness * budget_floor + (1.0 - aggressiveness) * statistical_edge
 
+	def _reserve_budget(self, budget: float, days_left: int) -> float:
+		reserve = max(self.RESERVE, budget * self.RESERVE_FRACTION)
+		if budget * 3 * self.PRESERVE_BASELINE_AGE < 10 * self.roommates * self.days:
+			# Reduce the reserve as remaining wear demand falls, keeping full packs.
+			lifetime = 64 + 1 / HOLE_PROBABILITY
+			packs = ceil(2 * self.roommates * days_left / (PACK_SIZE * lifetime))
+			reserve = min(reserve, PACK_COST * max(1, packs))
+		return reserve
+
 	def _discard_policy(self, turn: TurnContext) -> tuple[int, float]:
 		"""Return today's discard allowance and range aggressiveness."""
 		days_left = self.days - turn.day + 1
@@ -315,7 +324,7 @@ class Player4(BasePlayer):
 		if self._budget is None:
 			self._budget = turn.total_spent + turn.budget_remaining
 
-		reserve = max(self.RESERVE, self._budget * self.RESERVE_FRACTION)
+		reserve = self._reserve_budget(self._budget, days_left)
 		usable_budget = max(0.0, self._budget - reserve)
 		if turn.day <= self.WARMUP_DAYS:
 			local_budget = usable_budget / max(1, self.roommates)
