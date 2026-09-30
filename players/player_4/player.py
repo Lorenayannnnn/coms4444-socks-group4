@@ -140,9 +140,22 @@ class Player4(BasePlayer):
 		self._observe(offered)
 		discard_allowance, aggressiveness = self._discard_policy(turn)
 
+		scores = {
+			i: wears(offered[i])
+			for i in range(len(offered))
+			if wears(offered[i]) > self._minimum_age(offered[i], aggressiveness)
+		}
 		first, second = min(
 			combinations(range(len(offered)), 2),
-			key=lambda pair: self._pair_key(offered, pair),
+			key=lambda pair: (
+				self._pair_key(offered, pair)[0],
+				-sum(
+					sorted((s for i, s in scores.items() if i not in pair), reverse=True)[
+						:discard_allowance
+					]
+				),
+				self._pair_key(offered, pair)[1:],
+			),
 		)
 		wear = (first, second)
 
@@ -326,7 +339,8 @@ class Player4(BasePlayer):
 
 		reserve = self._reserve_budget(self._budget, days_left)
 		usable_budget = max(0.0, self._budget - reserve)
-		if turn.day <= self.WARMUP_DAYS:
+		generous = self._budget * 3 * self.PRESERVE_BASELINE_AGE >= 10 * self.roommates * self.days
+		if turn.day <= (5 if generous else self.WARMUP_DAYS):
 			local_budget = usable_budget / max(1, self.roommates)
 		else:
 			own_imputed_spend = self._requested_discards * PACK_COST / PACK_SIZE
