@@ -1,0 +1,9 @@
+{
+  "replayed_simulations": 5280,
+  "verified_replays": 40,
+  "submitted_mean": 923.6255299656967,
+  "counterfactual_mean": 887.9175149745788,
+  "counterfactual_rank": 2,
+  "counterfactual_leader": 1,
+  "counterfactual_leader_mean": 886.5763328848773
+}

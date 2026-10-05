@@ -42,6 +42,25 @@ roommate-weighted scores. Raw inputs are preserved.
 5. `05_capacity`: capacity effects within fixed budget-duration settings.
 6. `06_unit`: paired four-versus-five changes by household size.
 7. `07_externalities`: changes for the retained four groups when Group 4 enters a roster.
+8. `08_households`: Group 4's mean rank by household type and each type's share of the gap to the leader.
+9. `09_discard_ablation`: the replay without voluntary discards (needs `analysis/discard_ablation.csv`).
+
+## Discard ablation
+
+`discard_ablation.py` replays every finite-budget simulation in which Group 4 held most of the
+seats, plus the nine-person households with a single Group 4 player, with Group 4's discard
+allowance fixed at zero. Everything else (roster, seat order, drawer, budget, duration, seed)
+matches the tournament. Run it from a checkout of the course repository's final `main`, so the
+simulator and the other groups' players are the tournament versions:
+
+```sh
+python /path/to/report/discard_ablation.py /path/to/results/7_raw_runs.csv \
+    /path/to/report/analysis/discard_ablation.csv --workers 8
+```
+
+It also replays 40 random simulations with the unmodified player and stops unless every seat
+reproduces its tournament score. `analyze_tournament.py` checks those rows again before using
+the file.
 
 The CSV summaries and `metrics.json` contain the calculations behind report claims.
 The script checks identifiers, repetition counts, repeated household fields,
