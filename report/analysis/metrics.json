@@ -1,0 +1,17 @@
+{
+  "simulations": 81216,
+  "rows": 578016,
+  "configurations": 27072,
+  "faults": 0,
+  "group4_sockless_score_share": 0.9995482134534699,
+  "group4_pairs": 14688,
+  "group4_unit4_score": 1071.0959206956218,
+  "group4_unit5_score": 776.1551392357717,
+  "group4_unit4_mismatch": 0.7505780762843832,
+  "group4_unit5_mismatch": 0.08398510065606034,
+  "group4_unit4_sockless_pct": 1.6332173807094281,
+  "group4_unit5_sockless_pct": 1.1841906038607142,
+  "group4_homo_exhaustion_pct": 30.90277777777778,
+  "group4_homo_sockless_pct": 22.77777777777778,
+  "group4_homo_no_sockless_after_exhaustion_pct": 8.125
+}

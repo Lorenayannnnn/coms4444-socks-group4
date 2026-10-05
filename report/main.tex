@@ -1,0 +1,347 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{placeins}
+\usepackage[hidelinks]{hyperref}
+
+\title{COMS 4444 Sock Project -- Group 4}
+\author{Rohun Agrawal}
+\date{October 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This project involves a scenario where roommates share socks from a single drawer. The drawer is initialized with a capacity of $C$ socks and starts full with an equal number of black and white socks. Each day, the $n$ roommates access the drawer in a random order and selects \(u \in \{4,5\}\) socks at random. From these socks, each roommate chooses two to wear and decides whether to return or discard the remaining socks.
+
+Sock shades change gradually with use. White socks begin at shade 255 and decrease by 2 after each wear until reaching 127, while black socks begin at shade 0 and increase by 1 after each wear until reaching 64. Wearing two socks $i, j$ with shades $s_i, s_j$, costs embarrassment \(\lvert s_i-s_j\rvert\) when the difference exceeds 6, and nothing otherwise. When socks are at their terminal shade, they also have a 25\% chance of developing a hole after being worn and must then be discarded.
+
+Discarded socks are replaced in packs of six. Whenever six discarded socks of a given color have accumulated, a new pack is purchased for \$10, provided the total spending does not exceed the simulation budget $B$. If the drawer contains fewer than two socks when a roommate tries to select stocks, that roommate wears no socks and incurs an embarrassment score of $256^2$.
+
+The objective is to design a sock selection and discard strategy that minimizes total embarrassment over $T$ days while utilizing the available budget $B$. Our group can define the strategy for only the group 4 roommate. Thus, it is possible that we do not have access to strategies from other roommates and our own strategy must take that into consideration. Useful variables to keep track of include $S_t$, the amount of the budget that has been spent by day $t$, and $D_t$, the number of socks our group 4 roommate has chosen to discard up until day $t$.
+
+\section{Initial Strategy}
+
+Our first two deliverables combined greedy pair selection with simple rules for deciding which unworn socks to discard. The main intuition was that minimizing embarrassment requires both a good pair today and a drawer that will produce good pairs in future turns. Pair selection addresses the first goal directly, while discarding lets us influence the second by replacing some socks with fresh ones.
+
+\subsection{First Deliverable: Closest Pair and Fixed Discard Thresholds}
+
+Each turn, we wore the pair with the smallest shade difference:
+\[
+(i,j)=\arg\min_{i<j}\lvert s_i-s_j\rvert.
+\]
+This minimizes the current turn's embarrassment. With only \(u\in\{4,5\}\) socks drawn, there are just six or ten pairs to compare. Although every pair within six shades incurs zero embarrassment, our initial rule still preferred the smallest gap among those pairs.
+
+For the unworn socks, we used a minimum white shade and a maximum black shade. A white sock below its threshold or a black sock above its threshold was discarded. White socks darken with use and black socks lighten, so these rules remove socks that have moved sufficiently far from their original shade. In terms of the wear age \(a(s)\) used in our final strategy, where \(a(s)=(255-s)/2\) for white socks and \(a(s)=s\) for black socks, both rules impose an upper age limit on retained socks.
+
+The motivation was to keep the socks of each color concentrated near their fresh shade. A drawer can contain many socks of the same color yet still produce poor matches if their shades are spread across different stages of wear. Replacements arrive as identical fresh socks, so removing older socks could reinforce a population of similar shades and improve future matching opportunities. This benefit extends to every roommate using the shared drawer, even though each player observes only their own handful.
+
+Age was nevertheless only a proxy for usefulness. Two older socks can form an excellent pair, and an isolated fresh sock can be difficult to match. The fixed thresholds offered a simple way to manage future draws without estimating the drawer's full shade distribution. For a leftover exactly at a threshold, we retained the greedy baseline's fallback: among such leftovers, consider the one furthest from the worn pair's mean shade and discard it if the difference exceeds six and the remaining budget can buy a pack.
+
+\subsection{Second Deliverable: Wear-Age Tie Breaking and Budget Protection}
+
+Our second deliverable retained the fixed discard thresholds and added two refinements. First, when pairs tied for the smallest shade difference, we preferred the pair with the smallest combined wear age \(a(s_i)+a(s_j)\). This used equally good immediate matches to influence future sock deterioration. Wearing younger socks could delay losses from holes, since socks at their terminal shade have a 25\% chance of developing a hole when worn. The age estimate saturates at 64, so it cannot distinguish how many additional wears terminal-shade socks have survived.
+
+Second, we added a spending check before allowing voluntary discards. Aggressive replacement can maintain closely matched socks while money is available, but each discard contributes to a future pack purchase. Once the budget is exhausted, losses shrink the drawer and may eventually produce sockless turns, each costing \(256^2\) embarrassment. This makes retaining a usable sock valuable even when its shade is undesirable.
+
+At the start of day \(t\), spending reflects purchases through the preceding day. Using \(S_{t-1}\), we estimated the daily spending rate as
+\[
+\bar c_t=
+\begin{cases}
+0, & t=1,\\[4pt]
+\dfrac{S_{t-1}}{t-1}, & t>1.
+\end{cases}
+\]
+We allowed discards only when extending this rate over the remaining days still left a reserve:
+\[
+B-S_{t-1}-\bar c_t(T-t+1)\ge R_{\mathrm{initial}},
+\qquad
+R_{\mathrm{initial}}=\min(C,30).
+\]
+If this condition failed, we wore the selected pair and returned every unworn sock. With no budget limit, the spending check imposed no restriction.
+
+This check made the discard policy respond to household spending and the remaining horizon. It was a coarse safeguard: purchases happen in batches, and the other roommates may change their spending behavior. It also allowed all threshold-based discards when the check passed, rather than assigning a specific daily allowance. These limitations motivated the more explicit allocation of discard opportunities in our final strategy.
+
+We explored the fixed shade thresholds through simulation sweeps, comparing embarrassment and spending across candidate settings. The selected thresholds were 240 for white socks and 7 for black socks, corresponding to wear ages of 7.5 and 7. The main development across these deliverables was the progression from controlling shade variation to also considering whether the household could sustain the resulting replacement costs.
+
+\section{Final Strategy}
+
+Each day, our player wears the drawn pair with the lowest embarrassment and may discard unworn socks so that fresh ones replace them, lowering future embarrassment. Two questions decide the discards.
+
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{How many:} We estimate how much of the budget is left for us after the other roommates' projected spending, and spread it evenly over the \(T\) days (Section~\ref{sec:discard-number}).
+    \item \textbf{Which ones:} When the budget is large, discards are plentiful, so a simple rule suffices: discard socks much older than the other socks of their color (Section~\ref{sec:large-budget}). When the budget is small, each discard must count, so we discard the socks whose replacement by a fresh sock most lowers expected future embarrassment (Section~\ref{sec:small-budget}).
+\end{enumerate}
+
+\subsection{Notation}
+\label{sec:notation}
+
+
+\paragraph{Wear age.}
+White socks change by 2 shades per wear and black socks by 1, so to compare socks across colors we measure each sock by how many times it has been worn:
+\[
+a(s)=
+\begin{cases}
+\dfrac{255-s}{2}, & \text{for white socks},\\[6pt]
+s, & \text{for black socks}.
+\end{cases}
+\]
+
+A fresh sock has age \(0\), and a sock at its final shade (127 for white, 64 for black) has age \(64\).
+
+\paragraph{Budget size.}
+Several of our choices depend on how often the budget can replace socks. We measure this with \(\rho\), the average number of times each purchased sock must be worn for the budget to cover all \(T\) days. The roommates wear \(2nT\) socks in total, and the budget buys \(6B/10\) socks, so
+\[
+\rho
+=
+\frac{2nT}{6B/10}
+=
+\frac{10nT}{3B}.
+\]
+
+We call the budget \emph{large} when \(\rho \le 3\), that is, when it can replace each sock after at most 3 wears, and \emph{small} otherwise. With no budget limit, \(\rho=0\).
+
+\subsection{Set Number of Socks to Discard from Projected Household Spending}
+\label{sec:discard-number}
+
+We want to discard as many socks as the budget allows without overspending. Since we cannot see the other roommates' spending directly, we
+\begin{enumerate}
+    \item keep a reserve \(R\) unspent as a safety margin for avoiding overspending,
+    \item subtract the other roommates' projected spending to obtain our own budget \(b\), and
+    \item spread \(b\) evenly over the \(T\) days.
+\end{enumerate}
+This gives the \emph{allowance}, the most socks we may discard today.
+
+\paragraph{Reserve.}
+The reserve protects against overspending, for example when the other roommates spend more than projected. We set
+\[
+R=\max(30,0.1B),
+\]
+that is, \$30 or 10\% of the budget, whichever is larger (chosen by hyperparameter sweep). When the budget is small, this would leave money unused at the end, so we cap \(R\) at the cost of replacing the socks expected to wear out in the remaining days:
+\[
+R
+\le
+10\cdot
+\max\left(
+1,
+\left\lceil
+\frac{2n(T-t+1)}{6L}
+\right\rceil
+\right).
+\]
+
+The remaining \(T-t+1\) days bring \(2n(T-t+1)\) wears, and a sock lasts \(L=68\) wears on average: 64 to reach its final shade, then an expected 4 more before it gets a hole (25\% chance per wear). Dividing gives the number of socks that wear out; these are bought in packs of 6 for \$10, and we keep at least one pack. As fewer days remain, the cap falls and releases money for discards.
+
+\paragraph{Our projected budget.}
+Our own budget \(b\) is what is left after the reserve and the other roommates' projected spending. During the first \(W\) days, there is too little spending history to extrapolate, so we assume every roommate spends equally and set
+\[
+b=\frac{B-R}{n}.
+\]
+
+Afterward, we estimate the other roommates' spending so far as the household total minus the cost of our own discards (\$10/6 each), and assume they keep spending at the same daily rate until day \(T\):
+\[
+b
+=
+\max\left(
+0,\,
+B-R-
+\max\left(0,S_t-\frac{10D_t}{6}\right)\frac{T}{t}
+\right).
+\]
+
+We count our own discards as soon as we choose them, because \(S_t\) includes them only once six socks of that color have been discarded.
+
+\paragraph{Pace out spending.}
+Spreading \(b\) evenly keeps discards available every day rather than using them up early. Our budget buys
+\[
+q=\frac{6b}{10}
+\]
+socks, so by day \(t\) we may have discarded at most \(qt/T\) of them. Having already discarded \(D_t\), today we may discard
+\[
+\mathrm{allowance}
+=
+\max\left(
+0,\,
+\min\left(
+A,\,
+\left\lfloor
+\frac{qt}{T}-D_t
+\right\rfloor
+\right)
+\right),
+\]
+where \(A=2\) caps discards per turn. With \(u=4\), this allows discarding both unworn socks. With \(u=5\), it keeps the least worthwhile of the three unworn socks, saving allowance for better discards in later turns.
+
+\paragraph{Other cases where we do not discard.}
+The allowance is also zero in three cases:
+\begin{enumerate}[label=(\arabic*)]
+    \item the household is overspending, that is, \(S_t\) exceeds \((B-R)t/T\), the amount spent by today under an even schedule, by more than one pack (\$10);
+    \item less than \$10 of the budget remains, so no replacement pack can be bought;
+    \item it is one of the last \(\left\lceil C/(un)\right\rceil\) days.
+\end{enumerate}
+
+The household draws \(un\) socks per day, so it takes about \(C/(un)\) days to draw through the drawer, and a sock bought later would likely never be worn. With no budget limit, the allowance is \(A\) except in case (3).
+
+\subsection{Choose Socks to Wear and Discard}
+
+We wear a pair with the smallest embarrassment score. When several pairs tie, we wear the one that leaves the most valuable discards unworn (defined below for each budget size), and then the one with the youngest socks, saving older socks for discarding.
+
+\subsubsection{Large Budget: Discard Socks Unusually Old for Their Color}
+\label{sec:large-budget}
+
+A sock much older than the other socks of its color is hard to match, because few of them are within 6 shades of it. We therefore discard such socks, but never nearly new ones. The more discards the budget can afford, the looser both conditions become.
+
+\paragraph{What the budget affords.}
+We measure this with \(\alpha\), the discards per day our budget supports (\(q/T\), Section~\ref{sec:discard-number}) as a fraction of the per-turn maximum \(A\):
+\[
+\alpha
+=
+\min\left(1,\frac{q}{AT}\right),
+\]
+with \(\alpha=1\) under no budget limit. Whereas the allowance limits how many socks we discard today, \(\alpha\) sets how old a sock must be to be discarded at all.
+
+\paragraph{Threshold 1: Discard unusually old socks.}
+Let \(\mu\) and \(\sigma\) be the mean and standard deviation of the wear ages of the last \(\max(24,2C)\) socks of one color that our player has drawn. A sock of that color is unusually old when its age exceeds
+\[
+\mu+z\sigma.
+\]
+The multiplier \(z\) decreases as \(\alpha\) grows: when few discards are affordable, we spend them only on the most extreme socks.
+
+\paragraph{Threshold 2: Safeguard young socks.}
+We do not discard socks at or below a minimum wear age \(f\), to avoid spending on socks that are unusually old for their color but still nearly new. Like \(z\), this minimum is lower when the budget affords more discards. It falls linearly from \(a_0\) when the budget affords almost no discards (\(\alpha=0\)) to \(1\) when it affords the maximum (\(\alpha=1\)):
+\[
+f
+=
+1+(a_0-1)(1-\alpha).
+\]
+
+We choose \(a_0=7.5\) for white socks (shade 240) and \(a_0=7\) for black socks (shade 7) based on hyperparameter sweeping.
+
+\paragraph{Combining the two thresholds.}
+The age above which a sock is unusually old, kept between the minimum \(f\) and the largest age \(64\), is
+\[
+e
+=
+\min\left(
+64,\,
+\max(f,\mu+z\sigma)
+\right).
+\]
+
+An unworn sock is a discard candidate when its wear age \(a(s)\) is greater than
+\[
+\tau
+=
+\alpha f+(1-\alpha)e,
+\]
+which lies between \(f\) and \(e\) and moves from \(e\) toward \(f\) as the budget affords more discards.
+
+\paragraph{Final discard choice.}
+The threshold \(\tau\) decides which unworn socks may be discarded, and the allowance decides how many. If there are more candidates than the allowance, we discard those that are the most standard deviations older than the average sock of their color:
+\[
+\mathrm{score}(a)
+=
+\frac{a-\mu}{\max(1,\sigma)}.
+\]
+
+\subsubsection{Small Budget: Discard Socks Whose Replacement Lowers Future Expected Embarrassment}
+\label{sec:small-budget}
+
+When the budget is small, we discard a sock only when replacing it with a fresh sock would lower expected future embarrassment. We
+\begin{enumerate}[label=(\arabic*)]
+    \item predict the drawer's contents,
+    \item compute each sock's expected future embarrassment under this prediction, and
+    \item discard the socks whose replacement lowers it most.
+\end{enumerate}
+
+\paragraph{Predict drawer.}
+How much embarrassment a sock causes depends on the socks it is drawn with, so we predict what the drawer will contain. We predict the wear ages of the socks of each color based on two sources. The first is what we have seen: \(P_{\mathrm{seen}}(a)\), the fraction of the recently drawn socks of that color that have wear age \(a\). The second is what the remaining budget will add: fresh socks, which then age as they are worn. If socks are replaced at a steady rate, so that a sock survives each wear with probability \(p\), their wear ages follow
+\[
+P_{\mathrm{new}}(a)
+=
+\begin{cases}
+p^a(1-p), & a<64,\\
+p^{64}, & a=64.
+\end{cases}
+\]
+
+The predicted probability that a sock of that color has wear age \(a\) is
+\[
+P(a)
+=
+(1-m)P_{\mathrm{seen}}(a)
++
+mP_{\mathrm{new}}(a),
+\]
+where the weight \(m\), between 0 and 1, is the fraction of the drawer that we expect to be replaced soon. A color and a wear age determine a shade (Section~\ref{sec:notation}), so this also gives the probability of each shade.
+
+Both \(m\) and \(p\) depend on \(r\), the number of replacement socks per day that the household can still afford: the remaining budget \(B-S_t\) minus the reserve \(R\), converted at 6 socks per \$10 and spread over the \(T-t\) remaining days:
+\[
+r
+=
+\frac{6}{10}
+\cdot
+\frac{\max(0,B-S_t-R)}{T-t}.
+\]
+
+Unlike \(q/T\) in Section~\ref{sec:discard-number}, which counts only what our own budget affords, \(r\) counts every replacement, whoever discards. The larger \(r\) is, the more the drawer will be refreshed, so the larger \(m\) is and the lower \(p\) is.
+
+\paragraph{Expected future embarrassment of a sock.}
+Let \(V(s)\) be the expected embarrassment of a future turn in which we draw the sock of shade \(s\) together with \(u-1\) other socks, each drawn independently from the predicted drawer and equally likely to be white or black. Let \(G\) be the smallest shade gap between any two socks in the draw, with gaps above 64 counted as 64. Since we wear the closest pair, the embarrassment is \(G\) when \(G\ge 7\) and zero otherwise, so
+\[
+V(s)
+=
+\mathbb{E}\!\left[G\,\mathbf{1}\{G\ge 7\}\right]
+=
+7\,P(G\ge 7)
++
+\sum_{g=8}^{64} P(G\ge g).
+\]
+
+We compute each \(P(G\ge g)\) exactly, rather than by sampling, with a dynamic program over the sorted shades. It sums the probability of every placement of the other socks below and above \(s\) such that all neighboring shades are at least \(g\) apart.
+
+\paragraph{Final discard choice.}
+We rank all socks by the reduction in expected future embarrassment
+\[
+V(s)-V(\mathrm{fresh})
+\]
+and discard the ones with the largest reductions.
+
+\section{Results}
+
+\input{report/analysis/results_section.tex}
+
+\section{Discussion}
+
+Our results demonstrate the central tradeoff in the Socks problem: reducing short-term embarrassment through aggressive sock replacement must be balanced against the long-term cost of maintaining the shared drawer. Discarding an aged or poorly matched sock can improve the quality of future draws, but every six discarded socks of the same colour triggers cost of a replacement pack. If the household exhausts its budget, discarded socks are no longer replenished, which can eventually leave roommates without enough socks to wear and incur a substantially larger embarrassment penalty. Our strategy therefore cannot optimize each day's hand independently; it must consider how present decisions affect both future pair quality and the remaining household budget.
+
+A significant limitation of our approach is the incomplete information available to each player. A roommate observes only the socks drawn on their own turn and cannot track which socks other roommates have worn or the current number of discarded socks awaiting replenishment. Although the simulator provides the total amount spent, this reveals a purchase only after a replacement pack has already been triggered. Consequently, our strategy must estimate the state of the shared drawer and the effect of its own discard decisions rather than calculate them exactly. The neighbor comparisons demonstrate that household composition matters, but the raw records do not reveal whether a particular difference arose from discarding, wear choices, or subsequent holes. Daily observations would be needed to attribute those effects to a specific mechanism.
+
+Budget management introduces an additional source of uncertainty. Our player attempts to pace discretionary discards according to the remaining budget and simulation horizon, but it cannot directly observe how close each colour is to triggering its next six-sock replacement pack. Moreover, worn-out socks that develop holes also require replacements, so not all of the budget can safely be allocated to voluntary discarding. The distinction between failed purchases and sockless turns is important: some households finished after replacement became unaffordable, while others lost much of their remaining stock. Protecting enough socks to reach day \(T\), rather than only controlling spending, is the more direct objective. The fact that 99.95\% of Group 4's aggregate score came from sockless penalties makes this the main priority for improving tournament performance.
+
+There are also limitations to our pair-selection and discard heuristics. White and black socks age at different rates; as a result, shade alone does not provide a uniform measure of remaining sock life. Our later strategy accounts for this distinction for estimating wear, but decisions about whether an unused sock should be preserved or discarded still depend on predictions about future random draws. A sock that is a poor match today may form a useful pair later, while discarding it may alter both the drawer distribution and future replacement timing. The optimal decision therefore depends on a longer horizon that cannot be captured perfectly in a local heuristic.
+
+The household-size comparison needs to be interpreted in terms of resources. The tournament held total budget fixed across household sizes, so large households had less replacement money per person. Their initial stocks per person also differed. Strong single-roommate results and weak large-household results therefore do not by themselves establish that pooling or coordination caused the deterioration. The capacity experiments show that increasing initial stock can eliminate shortages in some short runs, while even a tenfold drawer increase can fail over a long horizon. A controlled pooling comparison should hold per-person resources and duration constant.
+
+\section{Future Work}
+
+A natural extension of our strategy would be to improve its model of the unobserved drawer state. Rather than relying primarily on recent draws, a future implementation could maintain probabilistic estimates of the number and age distribution of white and black socks. Such a model would not eliminate the partial-observability problem, but it could provide a more principled basis for predicting the value of keeping or replacing a sock.
+
+Budget management could similarly be more probabilistic. Because purchases occur in batches of six discarded socks of the same colour, the marginal cost of a discard depends heavily on the unknown number of previously discarded socks. A future strategy could maintain an estimated distribution over this hidden count for each colour and incorporate the expected replacement cost into its discard decision. It could also reserve an estimated proportion of the remaining budget for unavoidable replacements caused by holes, rather than treating the remaining budget as entirely available for strategic discards.
+
+Further experiments should isolate the effect of drawing five socks rather than four while holding the actual drawer capacity \(C\) fixed. The tournament's five-sock setup improved both matching and availability, but also started with more socks. A fixed-capacity comparison across several budgets and household sizes would establish how much of the observed improvement comes from the additional candidate sock, which increases the number of possible pairs from six to ten, and how much comes from the larger initial stock.
+
+Finally, the relationship between pooled and individual sock management warrants more controlled experimentation. The results indicate our player performs particularly well with one roommate but scales poorly in some larger households. Future experiments could compare an \(n\)-roommate shared drawer against \(n\) independent one-roommate simulations while keeping the total number of socks, per-person budget, and simulation length comparable. This would separate the benefit of having a larger pool of potential matches from the costs of incomplete information and independent decision making. Additional experiments with mixtures of different player strategies could further determine whether the poor scaling observed results from pooling itself or from identical agents making similar discard decisions.
+
+\clearpage
+\appendix
+\input{report/analysis/appendix_section.tex}
+
+\end{document}
